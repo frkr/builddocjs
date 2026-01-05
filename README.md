@@ -47,7 +47,7 @@ Script Node.js para exportar documentos Markdown para PDF formatado profissional
 2. Instale as dependências:
 
 ```bash
-npm install
+npm ci
 ```
 
 3. Se houver arquivo `.nvmrc`, use a versão correta do Node.js:
