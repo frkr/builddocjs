@@ -1,0 +1,16 @@
+# Node.js dependencies
+node_modules/
+
+# npm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# JetBrains IDEs
+.idea/
+
+# macOS
+.DS_Store
+
+# PDF output
+pdf_output/

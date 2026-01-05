@@ -1,0 +1,22 @@
+{
+  "name": "pydoc-pdf-export",
+  "version": "1.0.0",
+  "description": "Script para exportar documentos Markdown para PDF",
+  "main": "export_pdf.js",
+  "scripts": {
+    "export": "node export_pdf.js"
+  },
+  "keywords": [
+    "markdown",
+    "pdf",
+    "export"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "marked": "^11.0.0",
+    "mermaid": "^10.6.0"
+  }
+}
+
