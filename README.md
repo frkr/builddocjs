@@ -1,6 +1,6 @@
 # BuildDocJS - Exportador de Markdown para PDF
 
-> Projeto inspirado e derivado de: https://github.com/frkr/builddoc/tree/main
+> Projeto inspirado e derivado de: https://github.com/frkr/builddoc
 
 Script Node.js para exportar documentos Markdown para PDF formatado profissionalmente. Converte todos os arquivos `.md` da raiz do projeto em PDFs com numeração, índices e formatação profissional, incluindo suporte completo para renderização de diagramas Mermaid.js.
 
