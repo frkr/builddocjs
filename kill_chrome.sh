@@ -9,33 +9,26 @@
 echo "Encerrando processos do Chrome/Chromium..."
 
 # Matar processos do Google Chrome
-if pgrep -x "Google Chrome" > /dev/null; then
+if pgrep -fi "Google Chrome" > /dev/null || pgrep -fi "chrome" > /dev/null; then
     echo "  - Encerrando Google Chrome..."
-    pkill -9 "Google Chrome"
-    pkill -9 "Google Chrome Helper"
-    pkill -9 "Google Chrome Helper (Renderer)"
-    pkill -9 "Google Chrome Helper (GPU)"
+    pkill -9 -fi "Google Chrome" 2>/dev/null
+    pkill -9 -fi "chrome" 2>/dev/null
 fi
 
 # Matar processos do Chromium
-if pgrep -x "Chromium" > /dev/null; then
+if pgrep -fi "Chromium" > /dev/null || pgrep -fi "chromium" > /dev/null; then
     echo "  - Encerrando Chromium..."
-    pkill -9 "Chromium"
-    pkill -9 "Chromium Helper"
-    pkill -9 "Chromium Helper (Renderer)"
-    pkill -9 "Chromium Helper (GPU)"
-fi
-
-# Matar processos do Chrome de forma genérica (para diferentes sistemas)
-if pgrep -i chrome > /dev/null; then
-    echo "  - Encerrando processos Chrome restantes..."
-    pkill -9 -i chrome
+    pkill -9 -fi "Chromium" 2>/dev/null
+    pkill -9 -fi "chromium" 2>/dev/null
 fi
 
 # Verificar se ainda há processos
-if pgrep -i chrome > /dev/null; then
-    echo "  ⚠️  Ainda há processos Chrome em execução. Tentando forçar encerramento..."
-    killall -9 -i chrome 2>/dev/null || true
+if pgrep -fi chrome > /dev/null || pgrep -fi chromium > /dev/null; then
+    echo "  ⚠️  Ainda há processos Chrome/Chromium em execução. Tentando forçar encerramento..."
+    pkill -9 -fi chrome 2>/dev/null
+    pkill -9 -fi chromium 2>/dev/null
+    killall -9 "Google Chrome" 2>/dev/null
+    killall -9 "Chromium" 2>/dev/null
 else
     echo "  ✓ Todos os processos Chrome foram encerrados."
 fi

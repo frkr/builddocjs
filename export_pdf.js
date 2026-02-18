@@ -1,4 +1,15 @@
 #!/usr/bin/env node
+/*
+MIT License
+
+Copyright (c) Davi Saranszky Mesquita
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
+ */
 /**
  * Script para exportar documentos Markdown para PDF formatado profissionalmente.
  * 
@@ -358,26 +369,30 @@ function displayFileList(files) {
 }
 
 /**
- * Executa o script kill_chrome.sh
+ * Executa o script kill_chrome adequado para a plataforma (Windows ou Linux/macOS)
  */
 function executeKillChrome(projectRoot) {
     return new Promise((resolve) => {
-        const killChromePath = path.join(projectRoot, 'kill_chrome.sh');
+        const isWindows = process.platform === 'win32';
+        const killChromeScript = isWindows ? 'kill_chrome.bat' : 'kill_chrome.sh';
+        const killChromePath = path.join(projectRoot, killChromeScript);
         
         if (!fs.existsSync(killChromePath)) {
-            console.log('  ⚠️  Script kill_chrome.sh não encontrado. Pulando...');
+            console.log(`  ⚠️  Script ${killChromeScript} não encontrado. Pulando...`);
             resolve();
             return;
         }
         
         console.log('\n  Encerrando processos do Chrome...');
         
-        exec(`bash "${killChromePath}"`, (error, stdout, stderr) => {
+        const command = isWindows ? `"${killChromePath}"` : `bash "${killChromePath}"`;
+        
+        exec(command, (error, stdout, stderr) => {
             if (error) {
-                console.log(`  ⚠️  Erro ao executar kill_chrome.sh: ${error.message}`);
+                console.log(`  ⚠️  Erro ao executar ${killChromeScript}: ${error.message}`);
             } else {
                 if (stdout) {
-                    console.log(stdout);
+                    process.stdout.write(stdout);
                 }
             }
             resolve();
@@ -447,7 +462,7 @@ async function main() {
         console.log(`  PDFs salvos em: ${outputDir}`);
         console.log('═══════════════════════════════════════════════════════════\n');
         
-        // Executar kill_chrome.sh
+        // Executar kill_chrome
         await executeKillChrome(projectRoot);
         
     } catch (error) {
