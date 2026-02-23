@@ -291,6 +291,31 @@ function runChromePrintToPdf({ chromePath, htmlFilePath, pdfOutputPath }) {
 }
 
 /**
+ * Converte imagens locais referenciadas no HTML para base64 inline,
+ * resolvendo os caminhos relativos a partir do diretório do arquivo .md original.
+ */
+function inlineLocalImages(htmlContent, mdFileDir) {
+    return htmlContent.replace(/<img([^>]*?)src="([^"]*)"([^>]*?)>/gi, (match, before, src, after) => {
+        // Ignorar URLs remotas e data URIs
+        if (/^https?:\/\//i.test(src) || /^data:/i.test(src)) {
+            return match;
+        }
+        try {
+            const imgPath = path.isAbsolute(src) ? src : path.join(mdFileDir, src);
+            if (!fs.existsSync(imgPath)) return match;
+            const imgData = fs.readFileSync(imgPath);
+            const ext = path.extname(imgPath).slice(1).toLowerCase();
+            const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', svg: 'svg+xml', webp: 'webp' };
+            const mime = `image/${mimeMap[ext] || ext}`;
+            const base64 = imgData.toString('base64');
+            return `<img${before}src="data:${mime};base64,${base64}"${after}>`;
+        } catch (_) {
+            return match;
+        }
+    });
+}
+
+/**
  * Exporta um arquivo Markdown para PDF usando Puppeteer
  */
 async function exportMarkdownToPdf(mdFile, outputDir, browser) {
@@ -302,7 +327,11 @@ async function exportMarkdownToPdf(mdFile, outputDir, browser) {
         const markdownContent = fs.readFileSync(mdFile, 'utf8');
         
         // Criar HTML completo
-        const htmlContent = createHtmlTemplate(markdownContent);
+        let htmlContent = createHtmlTemplate(markdownContent);
+
+        // Converter imagens locais para base64 inline
+        const mdFileDir = path.dirname(mdFile);
+        htmlContent = inlineLocalImages(htmlContent, mdFileDir);
 
         // Preferir o modo “builddoc” (Chrome CLI) para evitar falhas do Puppeteer no macOS.
         const chromePath = resolveChromeExecutablePath();
