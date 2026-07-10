@@ -11,21 +11,23 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
  */
 /**
- * Script para exportar documentos Markdown para PDF formatado profissionalmente.
- * 
- * Este script converte todos os arquivos .md da raiz do projeto em PDFs
- * formatados com numeração, índices e formatação profissional.
- * Suporta renderização de diagramas Mermaid.js usando Chrome headless (Puppeteer).
+ * Script para exportar documentos Markdown para HTML e/ou PDF formatado.
+ *
+ * Converte todos os arquivos .md da raiz do projeto em HTMLs com CSS profissional
+ * e suporte a diagramas Mermaid.js. Opcionalmente exporta para PDF via Chrome headless.
+ *
+ * Uso:
+ *   node export_pdf.js              # exporta PDFs (padrão, requer Chrome)
+ *   node export_pdf.js --html       # exporta apenas os HTMLs (sem precisar do Chrome)
  */
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { exec, spawn } = require('child_process');
-const puppeteer = require('puppeteer');
 const marked = require('marked');
 
-// Configuração de estilo CSS para PDF profissional
+// Configuração de estilo CSS para HTML/PDF profissional
 const PDF_CSS = `
 @page {
     size: A4;
@@ -156,19 +158,17 @@ blockquote {
 /**
  * Cria o template HTML completo com Mermaid.js
  */
-function createHtmlTemplate(markdownContent) {
+function createHtmlTemplate(markdownContent, title) {
     // Configurar marked
     marked.setOptions({
         breaks: true,
         gfm: true
     });
-    
+
     // Converter Markdown para HTML
     let htmlContent = marked.parse(markdownContent);
-    
+
     // Transformar blocos de código mermaid em divs com classe mermaid
-    // O marked converte ```mermaid em <pre><code class="language-mermaid">
-    // Precisamos converter para <div class="mermaid">
     htmlContent = htmlContent.replace(
         /<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g,
         '<div class="mermaid">$1</div>'
@@ -179,7 +179,7 @@ function createHtmlTemplate(markdownContent) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documento PDF</title>
+    <title>${title}</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <style>
         ${PDF_CSS}
@@ -189,7 +189,7 @@ function createHtmlTemplate(markdownContent) {
     ${htmlContent}
     <script>
         // Inicializar Mermaid.js
-        mermaid.initialize({ 
+        mermaid.initialize({
             startOnLoad: true,
             theme: 'default',
             securityLevel: 'loose'
@@ -200,7 +200,7 @@ function createHtmlTemplate(markdownContent) {
             let renderedCount = 0;
             const mermaidElements = document.querySelectorAll('.mermaid');
             const totalCount = mermaidElements.length;
-            
+
             if (totalCount === 0) {
                 // Se não houver diagramas Mermaid, sinalizar imediatamente
                 window.mermaidReady = true;
@@ -239,6 +239,50 @@ function createHtmlTemplate(markdownContent) {
 </html>`;
 }
 
+/**
+ * Converte imagens locais referenciadas no HTML para base64 inline,
+ * resolvendo os caminhos relativos a partir do diretório do arquivo .md original.
+ */
+function inlineLocalImages(htmlContent, mdFileDir) {
+    return htmlContent.replace(/<img([^>]*?)src="([^"]*)"([^>]*?)>/gi, (match, before, src, after) => {
+        if (/^https?:\/\//i.test(src) || /^data:/i.test(src)) {
+            return match;
+        }
+        try {
+            const imgPath = path.isAbsolute(src) ? src : path.join(mdFileDir, src);
+            if (!fs.existsSync(imgPath)) return match;
+            const imgData = fs.readFileSync(imgPath);
+            const ext = path.extname(imgPath).slice(1).toLowerCase();
+            const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', svg: 'svg+xml', webp: 'webp' };
+            const mime = `image/${mimeMap[ext] || ext}`;
+            const base64 = imgData.toString('base64');
+            return `<img${before}src="data:${mime};base64,${base64}"${after}>`;
+        } catch (_) {
+            return match;
+        }
+    });
+}
+
+/**
+ * Gera o HTML a partir de um arquivo Markdown e salva no disco.
+ * Retorna o caminho do arquivo HTML gerado.
+ */
+function generateHtml(mdFile, outputDir) {
+    const filename = path.basename(mdFile, '.md');
+    const markdownContent = fs.readFileSync(mdFile, 'utf8');
+
+    let htmlContent = createHtmlTemplate(markdownContent, filename);
+    const mdFileDir = path.dirname(mdFile);
+    htmlContent = inlineLocalImages(htmlContent, mdFileDir);
+
+    const htmlOutputPath = path.join(outputDir, `${filename}.html`);
+    fs.writeFileSync(htmlOutputPath, htmlContent, 'utf8');
+
+    return htmlOutputPath;
+}
+
+// ── Modo PDF (Chrome headless) ──────────────────────────────────────────────
+
 function resolveChromeExecutablePath() {
     const candidates = [
         process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -251,11 +295,8 @@ function resolveChromeExecutablePath() {
     for (const p of candidates) {
         try {
             if (p && fs.existsSync(p)) return p;
-        } catch (_) {
-            // ignore
-        }
+        } catch (_) { /* ignore */ }
     }
-
     return null;
 }
 
@@ -278,10 +319,8 @@ function runChromePrintToPdf({ chromePath, htmlFilePath, pdfOutputPath }) {
         ];
 
         const child = spawn(chromePath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-
         let stderr = '';
         child.stderr.on('data', (d) => (stderr += d.toString()));
-
         child.on('error', (err) => reject(err));
         child.on('close', (code) => {
             if (code === 0) return resolve();
@@ -290,50 +329,11 @@ function runChromePrintToPdf({ chromePath, htmlFilePath, pdfOutputPath }) {
     });
 }
 
-/**
- * Converte imagens locais referenciadas no HTML para base64 inline,
- * resolvendo os caminhos relativos a partir do diretório do arquivo .md original.
- */
-function inlineLocalImages(htmlContent, mdFileDir) {
-    return htmlContent.replace(/<img([^>]*?)src="([^"]*)"([^>]*?)>/gi, (match, before, src, after) => {
-        // Ignorar URLs remotas e data URIs
-        if (/^https?:\/\//i.test(src) || /^data:/i.test(src)) {
-            return match;
-        }
-        try {
-            const imgPath = path.isAbsolute(src) ? src : path.join(mdFileDir, src);
-            if (!fs.existsSync(imgPath)) return match;
-            const imgData = fs.readFileSync(imgPath);
-            const ext = path.extname(imgPath).slice(1).toLowerCase();
-            const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', svg: 'svg+xml', webp: 'webp' };
-            const mime = `image/${mimeMap[ext] || ext}`;
-            const base64 = imgData.toString('base64');
-            return `<img${before}src="data:${mime};base64,${base64}"${after}>`;
-        } catch (_) {
-            return match;
-        }
-    });
-}
-
-/**
- * Exporta um arquivo Markdown para PDF usando Puppeteer
- */
-async function exportMarkdownToPdf(mdFile, outputDir, browser) {
+async function exportMarkdownToPdf(mdFile, outputDir) {
     try {
         const filename = path.basename(mdFile, '.md');
         console.log(`  Processando: ${filename}.md`);
-        
-        // Ler conteúdo do arquivo Markdown
-        const markdownContent = fs.readFileSync(mdFile, 'utf8');
-        
-        // Criar HTML completo
-        let htmlContent = createHtmlTemplate(markdownContent);
 
-        // Converter imagens locais para base64 inline
-        const mdFileDir = path.dirname(mdFile);
-        htmlContent = inlineLocalImages(htmlContent, mdFileDir);
-
-        // Preferir o modo “builddoc” (Chrome CLI) para evitar falhas do Puppeteer no macOS.
         const chromePath = resolveChromeExecutablePath();
         if (!chromePath) {
             throw new Error(
@@ -341,25 +341,20 @@ async function exportMarkdownToPdf(mdFile, outputDir, browser) {
             );
         }
 
-        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pydoc-export-'));
+        // Gera HTML temporário
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'builddoc-export-'));
         const tempHtmlPath = path.join(tempDir, `${filename}.html`);
+        const markdownContent = fs.readFileSync(mdFile, 'utf8');
+        let htmlContent = createHtmlTemplate(markdownContent, filename);
+        htmlContent = inlineLocalImages(htmlContent, path.dirname(mdFile));
         fs.writeFileSync(tempHtmlPath, htmlContent, 'utf8');
 
-        const outputPath = path.join(outputDir, `${filename}.pdf`);
-        await runChromePrintToPdf({
-            chromePath,
-            htmlFilePath: tempHtmlPath,
-            pdfOutputPath: outputPath
-        });
+        const pdfPath = path.join(outputDir, `${filename}.pdf`);
+        await runChromePrintToPdf({ chromePath, htmlFilePath: tempHtmlPath, pdfOutputPath: pdfPath });
 
-        // best-effort cleanup
-        try {
-            fs.unlinkSync(tempHtmlPath);
-            fs.rmdirSync(tempDir);
-        } catch (_) {
-            // ignore
-        }
-        
+        // cleanup
+        try { fs.unlinkSync(tempHtmlPath); fs.rmdirSync(tempDir); } catch (_) { /* ignore */ }
+
         console.log(`    ✓ Gerado: ${filename}.pdf`);
         return true;
     } catch (error) {
@@ -384,49 +379,17 @@ function listMarkdownFiles(projectRoot) {
 /**
  * Exibe a lista de arquivos que serão processados
  */
-function displayFileList(files) {
+function displayFileList(files, outputExt) {
     console.log('\n═══════════════════════════════════════════════════════════');
     console.log('  Arquivos que serão processados:');
     console.log('═══════════════════════════════════════════════════════════\n');
-    
+
     files.forEach((file, index) => {
         const filename = path.basename(file, '.md');
-        console.log(`  ${index + 1}. ${path.basename(file)} → ${filename}.pdf`);
+        console.log(`  ${index + 1}. ${path.basename(file)} → ${filename}.${outputExt}`);
     });
-    
-    console.log('\n═══════════════════════════════════════════════════════════\n');
-}
 
-/**
- * Executa o script kill_chrome adequado para a plataforma (Windows ou Linux/macOS)
- */
-function executeKillChrome(projectRoot) {
-    return new Promise((resolve) => {
-        const isWindows = process.platform === 'win32';
-        const killChromeScript = isWindows ? 'kill_chrome.bat' : 'kill_chrome.sh';
-        const killChromePath = path.join(projectRoot, killChromeScript);
-        
-        if (!fs.existsSync(killChromePath)) {
-            console.log(`  ⚠️  Script ${killChromeScript} não encontrado. Pulando...`);
-            resolve();
-            return;
-        }
-        
-        console.log('\n  Encerrando processos do Chrome...');
-        
-        const command = isWindows ? `"${killChromePath}"` : `bash "${killChromePath}"`;
-        
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.log(`  ⚠️  Erro ao executar ${killChromeScript}: ${error.message}`);
-            } else {
-                if (stdout) {
-                    process.stdout.write(stdout);
-                }
-            }
-            resolve();
-        });
-    });
+    console.log('\n═══════════════════════════════════════════════════════════\n');
 }
 
 /**
@@ -434,73 +397,74 @@ function executeKillChrome(projectRoot) {
  */
 async function main() {
     const projectRoot = __dirname;
-    const outputDir = path.join(projectRoot, 'pdf_output');
-    
+
+    // Detecta modo --html
+    const htmlOnly = process.argv.includes('--html');
+    const outputExt = htmlOnly ? 'html' : 'pdf';
+    const outputDir = path.join(projectRoot, htmlOnly ? 'html_output' : 'pdf_output');
+
     // Criar diretório de saída
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
-    
+
     // Encontrar todos os arquivos .md na raiz
     const files = listMarkdownFiles(projectRoot);
-    
+
     if (files.length === 0) {
         console.log('Nenhum arquivo Markdown encontrado na raiz do projeto.');
         return;
     }
-    
-    // Exibir lista de arquivos que serão processados
-    displayFileList(files);
-    
+
+    displayFileList(files, outputExt);
+
     console.log(`Total: ${files.length} arquivo(s) Markdown encontrado(s).`);
     console.log(`Diretório de saída: ${outputDir}\n`);
-    
-    // Modo de exportação: Chrome headless via CLI (estilo builddoc)
-    console.log('Iniciando Chrome headless...');
-    const browser = null;
-    
-    try {
-        // Processar cada arquivo sequencialmente
-        let successCount = 0;
-        let errorCount = 0;
-        
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    if (htmlOnly) {
+        // ── Modo HTML-only (sem Chrome) ──────────────────────────────────
+        console.log('Modo HTML: gerando arquivos HTML...\n');
+
         for (const mdFile of files) {
             try {
-                await exportMarkdownToPdf(mdFile, outputDir, browser);
+                const filename = path.basename(mdFile, '.md');
+                console.log(`  Processando: ${filename}.md`);
+                generateHtml(mdFile, outputDir);
+                console.log(`    ✓ Gerado: ${filename}.html`);
                 successCount++;
             } catch (error) {
                 errorCount++;
-                // Erro já foi logado na função
+                console.error(`    ✗ Erro ao processar ${path.basename(mdFile)}: ${error.message}`);
             }
         }
-        
-        // Fechar navegador (se aplicável)
-        if (browser && typeof browser.close === 'function') {
-            await browser.close();
+    } else {
+        // ── Modo PDF (comportamento original) ────────────────────────────
+        console.log('Iniciando Chrome headless...');
+
+        for (const mdFile of files) {
+            try {
+                await exportMarkdownToPdf(mdFile, outputDir);
+                successCount++;
+            } catch (error) {
+                errorCount++;
+            }
         }
-        
-        // Exibir resumo
-        console.log('\n═══════════════════════════════════════════════════════════');
-        console.log('  Resumo do processamento:');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log(`  ✓ Sucesso: ${successCount} arquivo(s)`);
-        if (errorCount > 0) {
-            console.log(`  ✗ Erros: ${errorCount} arquivo(s)`);
-        }
-        console.log(`  Total: ${files.length} arquivo(s)`);
-        console.log(`  PDFs salvos em: ${outputDir}`);
-        console.log('═══════════════════════════════════════════════════════════\n');
-        
-        // Executar kill_chrome
-        await executeKillChrome(projectRoot);
-        
-    } catch (error) {
-        // Garantir que o navegador seja fechado mesmo em caso de erro (se aplicável)
-        if (browser && typeof browser.close === 'function') {
-            await browser.close().catch(() => {});
-        }
-        throw error;
     }
+
+    // Exibir resumo
+    console.log('\n═══════════════════════════════════════════════════════════');
+    console.log('  Resumo do processamento:');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log(`  ✓ Sucesso: ${successCount} arquivo(s)`);
+    if (errorCount > 0) {
+        console.log(`  ✗ Erros: ${errorCount} arquivo(s)`);
+    }
+    console.log(`  Total: ${files.length} arquivo(s)`);
+    console.log(`  Saída em: ${outputDir}`);
+    console.log('═══════════════════════════════════════════════════════════\n');
 }
 
 // Executar
@@ -511,4 +475,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { exportMarkdownToPdf, main, listMarkdownFiles, displayFileList };
+module.exports = { generateHtml, exportMarkdownToPdf, main, listMarkdownFiles };

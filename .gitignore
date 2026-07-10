@@ -14,3 +14,4 @@ yarn-error.log*
 
 # PDF output
 pdf_output/
+html_output/
