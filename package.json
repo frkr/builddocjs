@@ -1,20 +1,35 @@
 {
-  "name": "pydoc-pdf-export",
-  "version": "1.0.0",
-  "description": "Script para exportar documentos Markdown para PDF ou HTML",
-  "main": "export_pdf.js",
+  "name": "builddocjs",
+  "version": "0.1.0",
+  "description": "Converte documentos Markdown da raiz em HTML e PDF A4 profissionais, com Chromium externo via puppeteer-core.",
+  "main": "src/cli.js",
+  "bin": {
+    "builddocjs": "src/cli.js"
+  },
   "scripts": {
-    "export": "node export_pdf.js",
-    "html": "node export_pdf.js --html"
+    "build:html": "node src/cli.js --html-only",
+    "pdf": "node src/cli.js",
+    "build:pdf:check": "node src/cli.js --check",
+    "browser:verify": "node src/cli.js --check",
+    "test:unit": "node --test test/unit/",
+    "test:integration": "node --test test/integration/",
+    "check": "node --test test/unit/ test/integration/"
   },
   "keywords": [
     "markdown",
     "pdf",
-    "export"
+    "html",
+    "chromium",
+    "puppeteer-core"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
-    "marked": "^11.0.0"
+    "marked": "11.2.0",
+    "puppeteer-core": "25.9.0",
+    "sanitize-html": "2.17.7"
   }
 }

@@ -12,6 +12,27 @@ yarn-error.log*
 # macOS
 .DS_Store
 
-# PDF output
+# Generated output (legacy names remain ignored until the future cutover)
+build/
+dist/
 pdf_output/
 html_output/
+
+# Ephemeral workspaces and browser profiles
+.tmp/
+tmp/
+temp/
+.cache/
+.profiles/
+profiles/
+
+# Local test and gate reports
+coverage/
+reports/
+test-results/
+playwright-report/
+
+# Local environment files
+.env
+.env.*
+!.env.example
