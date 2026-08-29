@@ -20,6 +20,12 @@ test('loadConfig: valida timeoutMs positivo', () => {
   assert.throws(() => loadConfig({ root: '/tmp', timeoutMs: 0 }));
 });
 
+test('loadConfig: aceita timeoutMs e hardTimeoutMs explícitos', () => {
+  const cfg = loadConfig({ root: '/tmp/x', timeoutMs: 300000, hardTimeoutMs: 600000 });
+  assert.strictEqual(cfg.timeoutMs, 300000);
+  assert.strictEqual(cfg.hardTimeoutMs, 600000);
+});
+
 test('resolveChromiumPath: precedência CLI > env > config', () => {
   const cfg = { chromiumPath: '/config/path' };
   assert.strictEqual(resolveChromiumPath(cfg, {}, '/cli/path'), '/cli/path');

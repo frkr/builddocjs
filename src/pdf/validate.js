@@ -9,26 +9,37 @@ const { pdfError } = require('../errors');
  * Não aceita PDF parcial.
  */
 
+/** Streams maiores que isto são tratados como imagens; não são concatenados. */
+const MAX_INFLATE_STREAM_BYTES = 2 * 1024 * 1024;
+
 /**
- * Descomprime streams FlateDecode para inspeção.
+ * Descomprime streams FlateDecode pequenos para inspeção.
+ * Não reconstrói o PDF inteiro em uma string (PDFs com imagens estouram o
+ * limite de string do V8).
  * @param {string} s
- * @returns {string}
+ * @returns {string} concatenação apenas de streams pequenos já inflados
  */
 function inflateStreams(s) {
   const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
   const parts = [];
-  let last = 0;
   let m;
   while ((m = re.exec(s)) !== null) {
-    parts.push(s.slice(last, m.index));
+    if (m[1].length > MAX_INFLATE_STREAM_BYTES) continue;
     try {
-      const dec = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1');
-      parts.push('stream\n' + dec + '\nendstream');
-    } catch (_) { parts.push(m[0]); }
-    last = re.lastIndex;
+      parts.push(zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'));
+    } catch (_) {
+      parts.push(m[0]);
+    }
   }
-  parts.push(s.slice(last));
-  return parts.join('');
+  return parts.join('\n');
+}
+
+function addMatchLengths(s, re) {
+  let n = 0;
+  re.lastIndex = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) n += m[0].length;
+  return n;
 }
 
 /**
@@ -38,16 +49,27 @@ function inflateStreams(s) {
  */
 function analyzePdf(buf) {
   const raw = buf.toString('latin1');
-  const s = inflateStreams(raw);
-  const pageCount = (s.match(/\/Type\s*\/Page[^s]/g) || []).length;
+  const pageCount = (raw.match(/\/Type\s*\/Page[^s]/g) || []).length;
   const hasMediaBoxA4 =
-    /MediaBox\s*\[\s*0\s+0\s+59[0-9]\.?\d*\s+84[0-9]\.?\d*\]/.test(s) ||
-    /CropBox\s*\[\s*0\s+0\s+59[0-9]\.?\d*\s+84[0-9]\.?\d*\]/.test(s);
-  const literalText = (s.match(/\(([^)]*)\)/g) || []).join(' ');
-  const hexText = (s.match(/<([0-9A-Fa-f]{4,})>/g) || []).join(' ');
-  const textLen = literalText.length + hexText.length;
-  const hasAnnots = /\/Annots/.test(s);
-  const hasEOF = /%%EOF\s*$/.test(raw.trim());
+    /MediaBox\s*\[\s*0\s+0\s+59[0-9]\.?\d*\s+84[0-9]\.?\d*\]/.test(raw) ||
+    /CropBox\s*\[\s*0\s+0\s+59[0-9]\.?\d*\s+84[0-9]\.?\d*\]/.test(raw);
+  const hasAnnots = /\/Annots/.test(raw);
+  const tail = raw.length > 64 ? raw.slice(raw.length - 64) : raw;
+  const hasEOF = /%%EOF\s*$/.test(tail.replace(/\s+$/g, ''));
+
+  let textLen =
+    addMatchLengths(raw, /\(([^)]*)\)/g) + addMatchLengths(raw, /<([0-9A-Fa-f]{4,})>/g);
+
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    if (m[1].length > MAX_INFLATE_STREAM_BYTES) continue;
+    try {
+      const dec = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1');
+      textLen += addMatchLengths(dec, /\(([^)]*)\)/g);
+      textLen += addMatchLengths(dec, /<([0-9A-Fa-f]{4,})>/g);
+    } catch (_) { /* stream não é FlateDecode */ }
+  }
   return { pageCount, hasMediaBoxA4, textLen, hasAnnots, hasEOF };
 }
 

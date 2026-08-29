@@ -18,6 +18,8 @@ Opções:
   --root <dir>            Diretório raiz (padrão: cwd)
   --chromium-path <path>  Caminho do executável Chromium
   --output-dir <dir>      Diretório de saída (padrão: build)
+  --timeout-ms <n>        Timeout por documento em ms (padrão: 30000)
+  --hard-timeout-ms <n>   Timeout global do lote em ms (0 = automático)
   --check                 Apenas preflight (discovery + browser), sem renderizar
   --html-only             Gera apenas HTML (sem PDF/browser)
   --help                  Mostra esta ajuda
@@ -35,6 +37,8 @@ function parseArgs(argv) {
       case '--root': args.root = argv[++i]; break;
       case '--chromium-path': args.chromiumPath = argv[++i]; break;
       case '--output-dir': args.outputDir = argv[++i]; break;
+      case '--timeout-ms': args.timeoutMs = Number(argv[++i]); break;
+      case '--hard-timeout-ms': args.hardTimeoutMs = Number(argv[++i]); break;
       case '--check': args.check = true; break;
       case '--html-only': args.htmlOnly = true; break;
       case '--help': args.help = true; break;
@@ -67,6 +71,10 @@ async function main() {
       process.env,
       args.chromiumPath
     ),
+    ...(Number.isFinite(args.timeoutMs) && args.timeoutMs > 0 ? { timeoutMs: args.timeoutMs } : {}),
+    ...(Number.isFinite(args.hardTimeoutMs) && args.hardTimeoutMs >= 0
+      ? { hardTimeoutMs: args.hardTimeoutMs }
+      : {}),
   });
 
   // Preflight sem renderização.

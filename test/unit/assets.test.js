@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { resolveLocalAsset, inlineAssets, isWithinRoot } = require('../../src/assets/resolve');
+const { resolveLocalAsset, inlineAssets, isWithinRoot, MAX_ASSET_BYTES } = require('../../src/assets/resolve');
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'builddoc-assets-'));
@@ -51,6 +51,10 @@ test('resolveLocalAsset: rejeita asset ausente', () => {
   const dir = makeTmpDir();
   assert.throws(() => resolveLocalAsset('missing.png', dir, dir));
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('MAX_ASSET_BYTES: sem teto de megabytes', () => {
+  assert.strictEqual(MAX_ASSET_BYTES, Infinity);
 });
 
 test('inlineAssets: deixa remoto/data intacto', () => {

@@ -14,7 +14,7 @@ const { validatePdf } = require('../pdf/validate');
 const { publishPdf, sha256 } = require('./publish');
 const { redactConfig } = require('../config');
 const { Observability } = require('../observability');
-const { BuildDocError, ErrorCodes } = require('../errors');
+const { BuildDocError, ErrorCodes, timeoutError } = require('../errors');
 
 /**
  * Orquestra o lote: discovery → pipeline HTML → engine → PDF → validação →

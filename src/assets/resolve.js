@@ -13,7 +13,8 @@ const { renderError } = require('../errors');
  * - Valida magic bytes/MIME, tamanho e formato.
  */
 
-const MAX_ASSET_BYTES = 5 * 1024 * 1024; // 5 MB
+/** Sem teto de megabytes: assets locais válidos são inlined por completo. */
+const MAX_ASSET_BYTES = Infinity;
 
 const MIME_BY_EXT = {
   '.png': 'image/png',
@@ -95,10 +96,6 @@ function resolveLocalAsset(src, docDir, root) {
   if (!stat.isFile()) {
     throw renderError(`Asset não é arquivo regular: ${path.basename(src)}`);
   }
-  if (stat.size > MAX_ASSET_BYTES) {
-    throw renderError(`Asset excede limite de tamanho: ${path.basename(src)}`);
-  }
-
   const buf = fs.readFileSync(real);
   if (!matchesMagic(buf, mime)) {
     throw renderError(`Asset com conteúdo inválido (MIME falso): ${path.basename(src)}`);
